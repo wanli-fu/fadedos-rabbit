@@ -7,6 +7,7 @@ import com.fadedos.food.orderservicemanager.enummeration.OrderStatus;
 import com.fadedos.food.orderservicemanager.po.OrderDetailPO;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rabbitmq.client.*;
+import com.sun.org.apache.bcel.internal.generic.IFNULL;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;
@@ -77,6 +78,7 @@ public class OrderMessageService {
 
             /*---------settlement---------*/
             channel.exchangeDeclare(
+                    //由于使用的fanout 群发 则须用两个虚拟机  订单模块 给 结算模块发送的消息 是这个交换机
                     "exchange.order.settlement",
                     BuiltinExchangeType.FANOUT,
                     true,
@@ -85,7 +87,8 @@ public class OrderMessageService {
 
             channel.queueBind(
                     "queue.order",
-                    "exchange.order.settlement",
+                    //由于使用的fanout 群发 则须用两个虚拟机  订单模块 接收的到 结算模块的消息 是这个交换机
+                    "exchange.settlement.order",
                     "key.order"
             );
 
@@ -100,6 +103,7 @@ public class OrderMessageService {
 
     DeliverCallback deliverCallback = ((consumerTag, message) -> {
         String messageBody = new String(message.getBody());
+        log.info("deliverCallback:messageBody:{}", messageBody);
 
         ConnectionFactory connectionFactory = new ConnectionFactory();
         connectionFactory.setHost("129.28.198.9");
@@ -142,7 +146,7 @@ public class OrderMessageService {
                     break;
                 case RESTAURANT_CONFIRMED:
                     if (null != orderMessageDTO.getDeliverymanId()) {
-                        //持久化订单
+                        //持久化订单  此处有骑手id 说明订单状态为骑手确认OK
                         orderDetailPO.setStatus(OrderStatus.DELIVERYMAN_CONFIRMED);
                         orderDetailPO.setDeliverymanId(orderMessageDTO.getDeliverymanId());
                         orderDetailDao.update(orderDetailPO);
