@@ -17,6 +17,7 @@ import java.util.concurrent.TimeoutException;
 
 /**
  * 消息处理相关业务逻辑
+ *
  * @author wlzfw
  */
 @Slf4j
@@ -74,9 +75,24 @@ public class OrderMessageService {
                     "key.order"
             );
 
+            /*---------settlement---------*/
+            channel.exchangeDeclare(
+                    "exchange.order.settlement",
+                    BuiltinExchangeType.FANOUT,
+                    true,
+                    false,
+                    null);
+
+            channel.queueBind(
+                    "queue.order",
+                    "exchange.order.settlement",
+                    "key.order"
+            );
+
             //消费消息
-            channel.basicConsume("queue.order",true,deliverCallback,consumerTag -> {});
-            while (true){
+            channel.basicConsume("queue.order", true, deliverCallback, consumerTag -> {
+            });
+            while (true) {
                 Thread.sleep(10000000);
             }
         }
@@ -115,7 +131,7 @@ public class OrderMessageService {
                                     "exchange.order.deliveryman",
                                     "key.deliveryman",//骑手微服务声明的routing key 谁接收消息谁申明routing key和队列
                                     null,
-                                    messageBody.getBytes()
+                                    messageToSend.getBytes()
                             );
 
                         }
@@ -125,6 +141,26 @@ public class OrderMessageService {
                     }
                     break;
                 case RESTAURANT_CONFIRMED:
+                    if (null != orderMessageDTO.getDeliverymanId()) {
+                        //持久化订单
+                        orderDetailPO.setStatus(OrderStatus.DELIVERYMAN_CONFIRMED);
+                        orderDetailPO.setDeliverymanId(orderMessageDTO.getDeliverymanId());
+                        orderDetailDao.update(orderDetailPO);
+
+                        try (Connection connection = connectionFactory.newConnection();
+                             Channel channel = connection.createChannel()) {
+                            String messageToSend = objectMapper.writeValueAsString(orderMessageDTO);
+                            channel.basicPublish(
+                                    "exchange.order.settlement",
+                                    "key.order",
+                                    null,
+                                    messageToSend.getBytes()
+                            );
+                        }
+                    } else {
+                        orderDetailPO.setStatus(OrderStatus.FAILED);
+                        orderDetailDao.update(orderDetailPO);
+                    }
                     break;
                 case DELIVERYMAN_CONFIRMED:
                     break;
@@ -138,7 +174,7 @@ public class OrderMessageService {
                     throw new IllegalStateException("Unexpected value: " + orderDetailPO.getStatus());
             }
         } catch (Exception e) {
-            log.error(e.getMessage(),e);
+            log.error(e.getMessage(), e);
         }
     });
 }
