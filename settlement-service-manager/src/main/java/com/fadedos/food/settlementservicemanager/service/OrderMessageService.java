@@ -91,6 +91,7 @@ public class OrderMessageService {
             settlementPO.setOrderId(orderMessageDTO.getOrderId());
             settlementPO.setAmount(orderMessageDTO.getPrice());
             settlementPO.setDate(new Date());
+            //银行交易id
             Integer settlementId = settlementService.settlement(
                     orderMessageDTO.getAccountId(),
                     orderMessageDTO.getPrice());
@@ -100,6 +101,8 @@ public class OrderMessageService {
 
             //结算模块 存库
             settlementDao.insert(settlementPO);
+            //消息体重放入结算id
+            orderMessageDTO.setSettlementId(settlementPO.getId());
 
             try (Connection connection = connectionFactory.newConnection();
                  Channel channel = connection.createChannel()) {
