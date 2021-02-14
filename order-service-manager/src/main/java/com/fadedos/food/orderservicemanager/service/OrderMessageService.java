@@ -8,6 +8,7 @@ import com.fadedos.food.orderservicemanager.po.OrderDetailPO;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rabbitmq.client.*;
 import com.sun.org.apache.bcel.internal.generic.IFNULL;
+import com.sun.org.apache.xpath.internal.operations.Or;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;
@@ -92,6 +93,20 @@ public class OrderMessageService {
                     "key.order"
             );
 
+            /*---------reward---------*/
+            channel.exchangeDeclare(
+                    "exchange.order.reward",
+                    BuiltinExchangeType.TOPIC,
+                    true,
+                    false,
+                    null);
+
+            channel.queueBind(
+                    "queue.order",
+                    "exchange.order.reward",
+                    "key.order"
+            );
+
             //消费消息
             channel.basicConsume("queue.order", true, deliverCallback, consumerTag -> {
             });
@@ -167,8 +182,38 @@ public class OrderMessageService {
                     }
                     break;
                 case DELIVERYMAN_CONFIRMED:
+                    if (null != orderMessageDTO.getSettlementId()) {
+                        //存库
+                        orderDetailPO.setStatus(OrderStatus.SETTLEMENT_CONFIRMED);
+                        orderDetailPO.setSettlementId(orderMessageDTO.getSettlementId());
+                        orderDetailDao.update(orderDetailPO);
+
+                        //给积分微服务发送消息
+                        try (Connection connection = connectionFactory.newConnection();
+                             Channel channel = connection.createChannel()) {
+                            String messageToSend = objectMapper.writeValueAsString(orderMessageDTO);
+                            channel.basicPublish(
+                                    "exchange.order.reward",
+                                    "key.reward",
+                                    null,
+                                    messageToSend.getBytes()
+                            );
+
+                        }
+                    } else {
+                        orderDetailPO.setStatus(OrderStatus.FAILED);
+                        orderDetailDao.update(orderDetailPO);
+                    }
                     break;
                 case SETTLEMENT_CONFIRMED:
+                    if (null != orderMessageDTO.getRewardId()) {
+                        orderDetailPO.setStatus(OrderStatus.ORDER_CREATED);
+                        orderDetailPO.setRewardId(orderMessageDTO.getRewardId());
+                        orderDetailDao.update(orderDetailPO);
+                    } else {
+                        orderDetailPO.setStatus(OrderStatus.FAILED);
+                        orderDetailDao.update(orderDetailPO);
+                    }
                     break;
                 case ORDER_CREATED:
                     break;
