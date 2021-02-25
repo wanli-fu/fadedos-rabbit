@@ -42,70 +42,7 @@ public class OrderMessageService {
 
         try (Connection connection = connectionFactory.newConnection();
              Channel channel = connection.createChannel()) {
-            /*---------restaurant---------*/
-            channel.exchangeDeclare(
-                    "exchange.order.restaurant",
-                    BuiltinExchangeType.DIRECT,
-                    true,
-                    false,
-                    null);
-            channel.queueDeclare(
-                    "queue.order",
-                    true,
-                    false,
-                    false,
-                    null
-            );
 
-            channel.queueBind(
-                    "queue.order",
-                    "exchange.order.restaurant",
-                    "key.order"
-            );
-
-            /*---------deliveryman---------*/
-            channel.exchangeDeclare(
-                    "exchange.order.deliveryman",
-                    BuiltinExchangeType.DIRECT,
-                    true,
-                    false,
-                    null);
-
-            channel.queueBind(
-                    "queue.order",
-                    "exchange.order.deliveryman",
-                    "key.order"
-            );
-
-            /*---------settlement---------*/
-            channel.exchangeDeclare(
-                    //由于使用的fanout 群发 则须用两个虚拟机  订单模块 给 结算模块发送的消息 是这个交换机
-                    "exchange.order.settlement",
-                    BuiltinExchangeType.FANOUT,
-                    true,
-                    false,
-                    null);
-
-            channel.queueBind(
-                    "queue.order",
-                    //由于使用的fanout 群发 则须用两个虚拟机  订单模块 接收的到 结算模块的消息 是这个交换机
-                    "exchange.settlement.order",
-                    "key.order"
-            );
-
-            /*---------reward---------*/
-            channel.exchangeDeclare(
-                    "exchange.order.reward",
-                    BuiltinExchangeType.TOPIC,
-                    true,
-                    false,
-                    null);
-
-            channel.queueBind(
-                    "queue.order",
-                    "exchange.order.reward",
-                    "key.order"
-            );
 
             //消费消息
             channel.basicConsume("queue.order", true, deliverCallback, consumerTag -> {
