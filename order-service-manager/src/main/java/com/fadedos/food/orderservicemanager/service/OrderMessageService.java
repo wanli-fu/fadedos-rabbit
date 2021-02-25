@@ -34,6 +34,7 @@ public class OrderMessageService {
      */
     @Async
     public void handleMessage() throws IOException, TimeoutException, InterruptedException {
+        Thread.sleep(5000);
         ConnectionFactory connectionFactory = new ConnectionFactory();
         connectionFactory.setHost("129.28.198.9");
         connectionFactory.setPort(5672);

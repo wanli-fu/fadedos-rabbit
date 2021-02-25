@@ -9,6 +9,10 @@ import com.fadedos.food.orderservicemanager.vo.OrderCreateVO;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rabbitmq.client.*;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.rabbit.connection.CorrelationData;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -25,6 +29,10 @@ import java.util.function.LongFunction;
 @Slf4j
 @Service
 public class OrderService {
+
+    @Autowired
+    private RabbitTemplate rabbitTemplate;
+
     @Autowired
     private OrderDetailDao orderDetailDao;
 
@@ -53,45 +61,71 @@ public class OrderService {
         orderMessageDTO.setProductId(orderDetailPO.getProductId());
         orderMessageDTO.setAccountId(orderDetailPO.getAccountId());
 
-        //获取rabbit服务,并发布消息给商家
-        ConnectionFactory connectionFactory = new ConnectionFactory();
-        connectionFactory.setHost("129.28.198.9");
-        connectionFactory.setPort(5672);
-        connectionFactory.setUsername("guest");
-        connectionFactory.setPassword("newpassword");
+        //DTO转换为json
+        String messageToSend = objectMapper.writeValueAsString(orderMessageDTO);
 
-        try (Connection connection = connectionFactory.newConnection();
-             Channel channel = connection.createChannel()) {
-            channel.confirmSelect();
-            ConfirmListener confirmListener = new ConfirmListener() {
-                @Override
-                //参数解释: deliveryTag 发送端消息的第几条消息    multiple true是多条  false 是单条
-                public void handleAck(long deliveryTag, boolean multiple) throws IOException {
-                    log.info("Ack,deliveryTag:{},multiple:{}", deliveryTag, multiple);
-                    //实际业务代码
-                }
+        MessageProperties messageProperties = new MessageProperties();
+        Message message = new Message(messageToSend.getBytes(), messageProperties);
 
-                @Override
-                public void handleNack(long deliveryTag, boolean multiple) throws IOException {
-                    log.info("Ack,deliveryTag:{},multiple:{}", deliveryTag, multiple);
-                    //实际业务代码
-                }
-            };
-            channel.addConfirmListener(confirmListener);
-            //DTO转换为json
-            String messageToSend = objectMapper.writeValueAsString(orderMessageDTO);
+        //发送方消息确认回调 消息标识
+        CorrelationData correlationData = new CorrelationData();
+        correlationData.setId(orderDetailPO.getId().toString());
 
-            //设置消息过期时间  该类使用构造者模式
-            AMQP.BasicProperties properties = new AMQP.BasicProperties().builder().expiration("15000").build();
-            //发布消息
-            channel.basicPublish(
-                    "exchange.order.restaurant",
-                    "key.restaurant",
-                    null,
-                    messageToSend.getBytes()
-            );
-            log.info("message send");
-            Thread.sleep(100000);
-        }
+        rabbitTemplate.send(
+                "exchange.order.restaurant",
+                "key.restaurant",
+                message,
+                correlationData);
+
+//        rabbitTemplate.convertAndSend(
+//                "exchange.order.restaurant",
+//                "key.restaurant",
+//                messageToSend);
+
+
+        log.info("message send");
+        Thread.sleep(100000);
+        //------------------------------//
+
+//        //获取rabbit服务,并发布消息给商家
+//        ConnectionFactory connectionFactory = new ConnectionFactory();
+//        connectionFactory.setHost("129.28.198.9");
+//        connectionFactory.setPort(5672);
+//        connectionFactory.setUsername("guest");
+//        connectionFactory.setPassword("newpassword");
+//
+//        try (Connection connection = connectionFactory.newConnection();
+//             Channel channel = connection.createChannel()) {
+//            channel.confirmSelect();
+//            ConfirmListener confirmListener = new ConfirmListener() {
+//                @Override
+//                //参数解释: deliveryTag 发送端消息的第几条消息    multiple true是多条  false 是单条
+//                public void handleAck(long deliveryTag, boolean multiple) throws IOException {
+//                    log.info("Ack,deliveryTag:{},multiple:{}", deliveryTag, multiple);
+//                    //实际业务代码
+//                }
+//
+//                @Override
+//                public void handleNack(long deliveryTag, boolean multiple) throws IOException {
+//                    log.info("Ack,deliveryTag:{},multiple:{}", deliveryTag, multiple);
+//                    //实际业务代码
+//                }
+//            };
+//            channel.addConfirmListener(confirmListener);
+//            //DTO转换为json
+//            String messageToSend = objectMapper.writeValueAsString(orderMessageDTO);
+//
+//            //设置消息过期时间  该类使用构造者模式
+//            AMQP.BasicProperties properties = new AMQP.BasicProperties().builder().expiration("15000").build();
+//            //发布消息
+//            channel.basicPublish(
+//                    "exchange.order.restaurant",
+//                    "key.restaurant",
+//                    null,
+//                    messageToSend.getBytes()
+//            );
+//            log.info("message send");
+//            Thread.sleep(100000);
+//        }
     }
 }
