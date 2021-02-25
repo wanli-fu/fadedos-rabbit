@@ -24,7 +24,7 @@ public class OrderController {
     private OrderService orderService;
 
     @PostMapping("/orders")
-    public void CreateOrder(@RequestBody OrderCreateVO orderCreateVO) throws IOException, TimeoutException {
+    public void CreateOrder(@RequestBody OrderCreateVO orderCreateVO) throws IOException, TimeoutException, InterruptedException {
         //推荐使用占位符
         log.info("createOrder:orderCreateVo:{}", orderCreateVO);
         //不推荐  若改成error级别 就会出现 但是此时不应该出现

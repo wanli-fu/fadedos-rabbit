@@ -7,9 +7,7 @@ import com.fadedos.food.orderservicemanager.enummeration.OrderStatus;
 import com.fadedos.food.orderservicemanager.po.OrderDetailPO;
 import com.fadedos.food.orderservicemanager.vo.OrderCreateVO;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.rabbitmq.client.Channel;
-import com.rabbitmq.client.Connection;
-import com.rabbitmq.client.ConnectionFactory;
+import com.rabbitmq.client.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -17,6 +15,7 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.util.Date;
 import java.util.concurrent.TimeoutException;
+import java.util.function.LongFunction;
 
 /**
  * @Description:处理用户关于订单的业务请求
@@ -34,7 +33,7 @@ public class OrderService {
      */
     ObjectMapper objectMapper = new ObjectMapper();
 
-    public void createOrder(OrderCreateVO orderCreateVO) throws IOException, TimeoutException {
+    public void createOrder(OrderCreateVO orderCreateVO) throws IOException, TimeoutException, InterruptedException {
         log.info("createOder:orderCreateVO:{}", orderCreateVO);
 
         OrderDetailPO orderDetailPO = new OrderDetailPO();
@@ -62,9 +61,28 @@ public class OrderService {
         connectionFactory.setPassword("newpassword");
 
         try (Connection connection = connectionFactory.newConnection();
-            Channel channel = connection.createChannel()) {
+             Channel channel = connection.createChannel()) {
+            channel.confirmSelect();
+            ConfirmListener confirmListener = new ConfirmListener() {
+                @Override
+                //参数解释: deliveryTag 发送端消息的第几条消息    multiple true是多条  false 是单条
+                public void handleAck(long deliveryTag, boolean multiple) throws IOException {
+                    log.info("Ack,deliveryTag:{},multiple:{}", deliveryTag, multiple);
+                    //实际业务代码
+                }
+
+                @Override
+                public void handleNack(long deliveryTag, boolean multiple) throws IOException {
+                    log.info("Ack,deliveryTag:{},multiple:{}", deliveryTag, multiple);
+                    //实际业务代码
+                }
+            };
+            channel.addConfirmListener(confirmListener);
             //DTO转换为json
             String messageToSend = objectMapper.writeValueAsString(orderMessageDTO);
+
+            //设置消息过期时间  该类使用构造者模式
+            AMQP.BasicProperties properties = new AMQP.BasicProperties().builder().expiration("15000").build();
             //发布消息
             channel.basicPublish(
                     "exchange.order.restaurant",
@@ -72,6 +90,8 @@ public class OrderService {
                     null,
                     messageToSend.getBytes()
             );
+            log.info("message send");
+            Thread.sleep(100000);
         }
     }
 }

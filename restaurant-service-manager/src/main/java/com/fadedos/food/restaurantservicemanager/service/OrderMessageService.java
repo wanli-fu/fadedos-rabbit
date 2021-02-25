@@ -10,17 +10,15 @@ import com.fadedos.food.restaurantservicemanager.po.RestaurantPO;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import com.rabbitmq.client.BuiltinExchangeType;
-import com.rabbitmq.client.Channel;
-import com.rabbitmq.client.Connection;
-import com.rabbitmq.client.ConnectionFactory;
-import com.rabbitmq.client.DeliverCallback;
+import com.rabbitmq.client.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.TimeoutException;
 
 @Slf4j
@@ -34,53 +32,84 @@ public class OrderMessageService {
 
     ObjectMapper objectMapper = new ObjectMapper();
 
+    @Autowired
+    private Channel channel;
+
     @Async
     public void handleMessage() throws IOException, TimeoutException, InterruptedException {
-        ConnectionFactory connectionFactory = new ConnectionFactory();
-        connectionFactory.setHost("129.28.198.9");
-        connectionFactory.setPort(5672);
-        connectionFactory.setUsername("guest");
-        connectionFactory.setPassword("newpassword");
+        log.info("OrderMessageService.handleMessage" + "start listening message");
 
-        try (Connection connection = connectionFactory.newConnection();
-             Channel channel = connection.createChannel()) {
+        //声明死信交换机
+        channel.exchangeDeclare(
+                "exchange.dlx",
+                BuiltinExchangeType.TOPIC,
+                true,
+                false,
+                null);
 
+        //声明接收死信的队列(注意它不是死信队列)
+        channel.queueDeclare(
+                "queue.dlx",
+                true,
+                false,
+                false,
+                null);
 
-            //声明 交换机
-            channel.exchangeDeclare(
-                    "exchange.order.restaurant",
-                    BuiltinExchangeType.DIRECT,
-                    true,
-                    false,
-                    null);
+        //绑定
+        channel.queueBind(
+                "queue.dlx",
+                "exchange.dlx",
+                "#");
 
-            // 谁监听这个队列 谁声明 谁绑定
-            //声明队列
-            channel.queueDeclare(
-                    "queue.restaurant",
-                    true,
-                    false,
-                    false,
-                    null);
+        //声明 交换机
+        channel.exchangeDeclare(
+                "exchange.order.restaurant",
+                BuiltinExchangeType.DIRECT,
+                true,
+                false,
+                null);
 
-            //绑定
-            channel.queueBind(
-                    "queue.restaurant",
-                    "exchange.order.restaurant",
-                    "key.restaurant"
-            );
+        Map<String, Object> args = new HashMap<>(16);
+        //该队列中所有的消息过期时间
+        args.put("x-message-ttl", 15000);
+        args.put("x-message-ttl", 1500000);//测试死信 避免测试影响
+//        args.put("x-expire", 15000); //不建议使用  这是队列的过期时间,会将队列删掉 导致路由失败
 
-            //监听的队列
-            channel.basicConsume(
-                    "queue.restaurant",
-                    true,
-                    deliverCallback,
-                    consumerTag -> {
-                    });
+        //声明死信队列参数  此时加入这个参数的队列是死信队列
+        args.put("x-dead-letter-exchange", "exchange.dlx");
 
-            while (true) {
-                Thread.sleep(100000);
-            }
+        //设置队列的最大长度 最大长度为5
+        args.put("x-max-length", 5);
+
+        // 谁监听这个队列 谁声明 谁绑定
+        //声明队列
+        channel.queueDeclare(
+                "queue.restaurant",
+                true,
+                false,
+                false,
+                args);
+
+        //绑定
+        channel.queueBind(
+                "queue.restaurant",
+                "exchange.order.restaurant",
+                "key.restaurant"
+        );
+
+        //消费端限流Qos
+        channel.basicQos(2);
+
+        //监听的队列
+        channel.basicConsume(
+                "queue.restaurant",
+                false,
+                deliverCallback,
+                consumerTag -> {
+                });
+
+        while (true) {
+            Thread.sleep(100000);
         }
     }
 
@@ -88,13 +117,6 @@ public class OrderMessageService {
         //取出消息
         String messageBody = new String(message.getBody());
         log.info("deliverCallback:messageBody:{}", messageBody);
-
-
-        ConnectionFactory connectionFactory = new ConnectionFactory();
-        connectionFactory.setHost("129.28.198.9");
-        connectionFactory.setPort(5672);
-        connectionFactory.setUsername("guest");
-        connectionFactory.setPassword("newpassword");
 
         try {
             //消息反序列化为DTO
@@ -112,16 +134,40 @@ public class OrderMessageService {
             } else {
                 orderMessageDTO.setConfirmed(false);
             }
-            try (Connection connection = connectionFactory.newConnection();
-                 Channel channel = connection.createChannel()) {
-                //序列化消息体 并发布
-                String messageToSend = objectMapper.writeValueAsString(orderMessageDTO);
-                channel.basicPublish(
-                        "exchange.order.restaurant",
-                        "key.order",
-                        null,
-                        messageToSend.getBytes());
-            }
+
+
+//                channel.addReturnListener(new ReturnListener() {
+////                    @Override
+////                    public void handleReturn(int replyCode, String replyText, String exchange, String routingKey, AMQP.BasicProperties properties, byte[] body) throws IOException {
+////                        log.info("Message Return:"+
+////                                "replyCode:{},replyText:{},exchange:{},routingKey:{},properties:{},body:{}",
+////                                replyCode,replyText,exchange,routingKey,properties,new String(body));
+////                        //除了打印log  可以加别的业务操作
+////                    }
+////                });
+
+            channel.addReturnListener(new ReturnCallback() {
+                @Override
+                public void handle(Return returnMessage) {
+                    int replyCode = returnMessage.getReplyCode();
+                    //除了打印log  可以加别的业务操作
+                }
+            });
+            Thread.sleep(3000);
+            //手动签收
+            channel.basicAck(message.getEnvelope().getDeliveryTag(), false);
+            //nack 测试死信
+//            channel.basicNack(message.getEnvelope().getDeliveryTag(), false,false);
+            //序列化消息体 并发布
+            String messageToSend = objectMapper.writeValueAsString(orderMessageDTO);
+            channel.basicPublish(
+                    "exchange.order.restaurant",
+                    "key.order",
+                    true,
+                    null,
+                    messageToSend.getBytes());
+            //避免channel不会关闭
+            Thread.sleep(1000);
         } catch (Exception e) {
             log.error(e.getMessage(), e);
         }
