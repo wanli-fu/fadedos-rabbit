@@ -1,12 +1,16 @@
 package com.fadedos.food.orderservicemanager.config;
 
 import com.fadedos.food.orderservicemanager.service.OrderMessageService;
+import com.rabbitmq.client.Channel;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.core.*;
 import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitAdmin;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.amqp.rabbit.listener.MessageListenerContainer;
+import org.springframework.amqp.rabbit.listener.SimpleMessageListenerContainer;
+import org.springframework.amqp.rabbit.listener.api.ChannelAwareMessageListener;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,10 +29,10 @@ public class RabbitConfig {
     @Autowired
     private OrderMessageService orderMessageService;
 
-    @Autowired //该方法会被自动在spring boot启动时调用
-    public void startListenMessage() throws InterruptedException, TimeoutException, IOException {
-        orderMessageService.handleMessage();
-    }
+//    @Autowired //该方法会被自动在spring boot启动时调用
+//    public void startListenMessage() throws InterruptedException, TimeoutException, IOException {
+//        orderMessageService.handleMessage();
+//    }
 
     /*---------restaurant---------*/
     @Bean
@@ -138,16 +142,47 @@ public class RabbitConfig {
         //发送端 未投递到 queue 退回模式 就会回调
         rabbitTemplate.setReturnsCallback(returned -> {
             int replyCode = returned.getReplyCode();
-            log.info("replyCode"+String.valueOf(replyCode));
+            log.info("replyCode" + String.valueOf(replyCode));
             //除了打印log,还可以加别的业务逻辑
         });
 
         //发送端确认 消息到达broker 就会回调
         rabbitTemplate.setConfirmCallback((correlationData, ack, cause) -> {
-            log.info("RabbitConfig.rabbitTemplate.correlationData:{},ack:{},cause:{}",correlationData,ack,cause);
+            log.info("RabbitConfig.rabbitTemplate.correlationData:{},ack:{},cause:{}", correlationData, ack, cause);
 
         });
         return rabbitTemplate;
     }
 
+    @Bean
+    public SimpleMessageListenerContainer simpleMessageListenerContainer(ConnectionFactory connectionFactory) {
+        SimpleMessageListenerContainer simpleMessageListenerContainer =
+                new SimpleMessageListenerContainer(connectionFactory);
+        simpleMessageListenerContainer.setQueueNames("queue.order");
+        //相当于前面线程池的大小 有几个消费者
+        simpleMessageListenerContainer.setConcurrentConsumers(3);
+        simpleMessageListenerContainer.setMaxConcurrentConsumers(5);
+//        simpleMessageListenerContainer.setAcknowledgeMode(AcknowledgeMode.AUTO);
+//
+//        simpleMessageListenerContainer.setMessageListener(message -> {
+//            log.info("message:{}", message);
+//            // 此处写消息处理接收的的逻辑,相当于    DeliverCallback deliverCallback = ((consumerTag, message) -> {
+//        });
+
+        //消息手动确认
+        simpleMessageListenerContainer.setAcknowledgeMode(AcknowledgeMode.MANUAL);
+        simpleMessageListenerContainer.setMessageListener(new ChannelAwareMessageListener() {
+            @Override
+            public void onMessage(Message message, Channel channel) throws Exception {
+                log.info("message:{}", message);
+                // 此处写消息处理接收的的逻辑,相当于    DeliverCallback deliverCallback = ((consumerTag, message) -> {
+                orderMessageService.handleMessage(message.getBody());
+                channel.basicAck(message.getMessageProperties().getDeliveryTag(),false);
+            }
+        });
+
+        //消费端限流
+        simpleMessageListenerContainer.setPrefetchCount(1);
+        return simpleMessageListenerContainer;
+    }
 }

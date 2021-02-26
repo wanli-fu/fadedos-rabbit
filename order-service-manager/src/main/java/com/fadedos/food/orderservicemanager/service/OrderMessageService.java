@@ -29,34 +29,33 @@ public class OrderMessageService {
     private OrderDetailDao orderDetailDao;
     ObjectMapper objectMapper = new ObjectMapper();
 
-    /**
-     * 声明消息队列,交换机,绑定,消息处理
-     */
-    @Async
-    public void handleMessage() throws IOException, TimeoutException, InterruptedException {
-        Thread.sleep(5000);
-        ConnectionFactory connectionFactory = new ConnectionFactory();
-        connectionFactory.setHost("129.28.198.9");
-        connectionFactory.setPort(5672);
-        connectionFactory.setUsername("guest");
-        connectionFactory.setPassword("newpassword");
+//    /**
+//     * 声明消息队列,交换机,绑定,消息处理
+//     */
+//    @Async
+//    public void handleMessage() throws IOException, TimeoutException, InterruptedException {
+//        Thread.sleep(5000);
+//        ConnectionFactory connectionFactory = new ConnectionFactory();
+//        connectionFactory.setHost("129.28.198.9");
+//        connectionFactory.setPort(5672);
+//        connectionFactory.setUsername("guest");
+//        connectionFactory.setPassword("newpassword");
+//
+//        try (Connection connection = connectionFactory.newConnection();
+//             Channel channel = connection.createChannel()) {
+//
+//
+//            //消费消息
+////            channel.basicConsume("queue.order", true, deliverCallback, consumerTag -> {
+////            });
+//            while (true) {
+//                Thread.sleep(10000000);
+//            }
+//        }
+//    }
 
-        try (Connection connection = connectionFactory.newConnection();
-             Channel channel = connection.createChannel()) {
-
-
-            //消费消息
-            channel.basicConsume("queue.order", true, deliverCallback, consumerTag -> {
-            });
-            while (true) {
-                Thread.sleep(10000000);
-            }
-        }
-    }
-
-    DeliverCallback deliverCallback = ((consumerTag, message) -> {
-        String messageBody = new String(message.getBody());
-        log.info("deliverCallback:messageBody:{}", messageBody);
+    public void handleMessage(byte[] messageBody) {
+        log.info("OrderMessageService.handMessage.messageBody:{}", new String(messageBody));
 
         ConnectionFactory connectionFactory = new ConnectionFactory();
         connectionFactory.setHost("129.28.198.9");
@@ -163,5 +162,5 @@ public class OrderMessageService {
         } catch (Exception e) {
             log.error(e.getMessage(), e);
         }
-    });
+    }
 }
