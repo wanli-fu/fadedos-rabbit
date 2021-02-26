@@ -10,12 +10,15 @@ import org.springframework.amqp.rabbit.core.RabbitAdmin;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.rabbit.listener.MessageListenerContainer;
 import org.springframework.amqp.rabbit.listener.SimpleMessageListenerContainer;
+import org.springframework.amqp.rabbit.listener.adapter.MessageListenerAdapter;
 import org.springframework.amqp.rabbit.listener.api.ChannelAwareMessageListener;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.TimeoutException;
 
 /**
@@ -171,18 +174,32 @@ public class RabbitConfig {
 
         //消息手动确认
         simpleMessageListenerContainer.setAcknowledgeMode(AcknowledgeMode.MANUAL);
-        simpleMessageListenerContainer.setMessageListener(new ChannelAwareMessageListener() {
-            @Override
-            public void onMessage(Message message, Channel channel) throws Exception {
-                log.info("message:{}", message);
-                // 此处写消息处理接收的的逻辑,相当于    DeliverCallback deliverCallback = ((consumerTag, message) -> {
-                orderMessageService.handleMessage(message.getBody());
-                channel.basicAck(message.getMessageProperties().getDeliveryTag(),false);
-            }
-        });
+
+//        //不优雅
+//        simpleMessageListenerContainer.setMessageListener(new ChannelAwareMessageListener() {
+//            @Override
+//            public void onMessage(Message message, Channel channel) throws Exception {
+//                log.info("message:{}", message);
+//                // 此处写消息处理接收的的逻辑,相当于    DeliverCallback deliverCallback = ((consumerTag, message) -> {
+//                orderMessageService.handleMessage(message.getBody());
+//                channel.basicAck(message.getMessageProperties().getDeliveryTag(),false);
+//            }
+//        });
 
         //消费端限流
         simpleMessageListenerContainer.setPrefetchCount(1);
+
+        //Message
+        MessageListenerAdapter messageListenerAdapter = new MessageListenerAdapter(orderMessageService);
+        //1条 8 10条 16 100条 256 一般是0.75倍
+        Map<String, String> methodMap = new HashMap<>(8);
+        //key 为队列名 value为 处理消息的方法
+        methodMap.put("queue.order", "handleMessag");
+        //可以自动根据不同队列 进行不同方法的处理
+        methodMap.put("queue.order1", "handleMessag1");
+        messageListenerAdapter.setQueueOrTagToMethodName(methodMap);
+
+        simpleMessageListenerContainer.setMessageListener(messageListenerAdapter);
         return simpleMessageListenerContainer;
     }
 }

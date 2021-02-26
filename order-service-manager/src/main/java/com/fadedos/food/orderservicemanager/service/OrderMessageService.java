@@ -54,7 +54,7 @@ public class OrderMessageService {
 //        }
 //    }
 
-    public void handleMessage(byte[] messageBody) {
+    public void handleMessag(byte[] messageBody) {
         log.info("OrderMessageService.handMessage.messageBody:{}", new String(messageBody));
 
         ConnectionFactory connectionFactory = new ConnectionFactory();
