@@ -134,10 +134,15 @@ public class RabbitConfig {
     public RabbitTemplate rabbitTemplate(ConnectionFactory connectionFactory) {
         RabbitTemplate rabbitTemplate = new RabbitTemplate(connectionFactory);
         rabbitTemplate.setMandatory(true);
+
+        //发送端 未投递到 queue 退回模式 就会回调
         rabbitTemplate.setReturnsCallback(returned -> {
             int replyCode = returned.getReplyCode();
+            log.info("replyCode"+String.valueOf(replyCode));
             //除了打印log,还可以加别的业务逻辑
         });
+
+        //发送端确认 消息到达broker 就会回调
         rabbitTemplate.setConfirmCallback((correlationData, ack, cause) -> {
             log.info("RabbitConfig.rabbitTemplate.correlationData:{},ack:{},cause:{}",correlationData,ack,cause);
 
