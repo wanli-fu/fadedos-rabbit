@@ -1,5 +1,6 @@
 package com.fadedos.food.orderservicemanager.config;
 
+import com.fadedos.food.orderservicemanager.dto.OrderMessageDTO;
 import com.fadedos.food.orderservicemanager.service.OrderMessageService;
 import com.rabbitmq.client.Channel;
 import lombok.extern.slf4j.Slf4j;
@@ -12,6 +13,7 @@ import org.springframework.amqp.rabbit.listener.MessageListenerContainer;
 import org.springframework.amqp.rabbit.listener.SimpleMessageListenerContainer;
 import org.springframework.amqp.rabbit.listener.adapter.MessageListenerAdapter;
 import org.springframework.amqp.rabbit.listener.api.ChannelAwareMessageListener;
+import org.springframework.amqp.support.converter.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -191,6 +193,19 @@ public class RabbitConfig {
 
         //Message
         MessageListenerAdapter messageListenerAdapter = new MessageListenerAdapter(orderMessageService);
+        Jackson2JsonMessageConverter messageConverter = new Jackson2JsonMessageConverter();
+        messageConverter.setClassMapper(new ClassMapper() {
+            @Override
+            public void fromClass(Class<?> aClass, MessageProperties messageProperties) {
+
+            }
+
+            @Override
+            public Class<?> toClass(MessageProperties messageProperties) {
+                return OrderMessageDTO.class;
+            }
+        });
+
         //1条 8 10条 16 100条 256 一般是0.75倍
         Map<String, String> methodMap = new HashMap<>(8);
         //key 为队列名 value为 处理消息的方法
@@ -198,6 +213,10 @@ public class RabbitConfig {
         //可以自动根据不同队列 进行不同方法的处理
         methodMap.put("queue.order1", "handleMessag1");
         messageListenerAdapter.setQueueOrTagToMethodName(methodMap);
+        //消息转换
+//        Jackson2JavaTypeMapper jackson2JavaTypeMapper = new DefaultJackson2JavaTypeMapper();不常用
+//        messageConverter.setJavaTypeMapper(jackson2JavaTypeMapper);
+        messageListenerAdapter.setMessageConverter(messageConverter);
 
         simpleMessageListenerContainer.setMessageListener(messageListenerAdapter);
         return simpleMessageListenerContainer;

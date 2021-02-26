@@ -54,8 +54,8 @@ public class OrderMessageService {
 //        }
 //    }
 
-    public void handleMessag(byte[] messageBody) {
-        log.info("OrderMessageService.handMessage.messageBody:{}", new String(messageBody));
+    public void handleMessag(OrderMessageDTO orderMessageDTO) {
+        log.info("OrderMessageService.handMessage.messageBody:{}", orderMessageDTO);
 
         ConnectionFactory connectionFactory = new ConnectionFactory();
         connectionFactory.setHost("129.28.198.9");
@@ -64,8 +64,8 @@ public class OrderMessageService {
         connectionFactory.setPassword("newpassword");
 
         try {
-            //消息体反序列化为DTO
-            OrderMessageDTO orderMessageDTO = objectMapper.readValue(messageBody, OrderMessageDTO.class);
+//            //消息体反序列化为DTO
+//            OrderMessageDTO orderMessageDTO = objectMapper.readValue(messageBody, OrderMessageDTO.class);
 
             //数据库中读取订PO
             OrderDetailPO orderDetailPO = orderDetailDao.selectOrder(orderMessageDTO.getOrderId());
