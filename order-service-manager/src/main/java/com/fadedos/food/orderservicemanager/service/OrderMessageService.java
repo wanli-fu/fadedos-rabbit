@@ -10,7 +10,11 @@ import com.rabbitmq.client.*;
 import com.sun.org.apache.bcel.internal.generic.IFNULL;
 import com.sun.org.apache.xpath.internal.operations.Or;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.core.ExchangeTypes;
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.rabbit.annotation.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -24,6 +28,7 @@ import java.util.concurrent.TimeoutException;
  */
 @Slf4j
 @Service
+//@RabbitListener(containerFactory = "rabbitListenerContainerFactory", queues = "queue.order")  放在类上 和方法上注解配合使用 @RabbitHandler(isDefault = true)
 public class OrderMessageService {
     @Autowired
     private OrderDetailDao orderDetailDao;
@@ -54,8 +59,49 @@ public class OrderMessageService {
 //        }
 //    }
 
-    public void handleMessag(OrderMessageDTO orderMessageDTO) {
-        log.info("OrderMessageService.handMessage.messageBody:{}", orderMessageDTO);
+    //    @RabbitHandler(isDefault = true) 和放在类上配合使用
+    @RabbitListener(
+//            containerFactory = "rabbitListenerContainerFactory",
+//            admin = "rabbitAdmin",
+            bindings = {
+                    @QueueBinding(
+                            value = @Queue(
+                                    name = "queue.order"
+//                                    arguments = {
+//                                            @Argument(
+//                                                    name = "x-message-ttl",
+//                                                    value = "1000",
+//                                                    type = "java.lang.Integer"
+//                                            ),
+//                                            @Argument(
+//                                                    name = "x-dead-letter-exchange",
+//                                                    value = "exchange.dlx"
+//                                            )
+//                                    }
+                            ),
+                            exchange = @Exchange(name = "exchange.order.restaurant"),
+                            key = "key.order"
+                    ),
+                    @QueueBinding(
+                            value = @Queue(name = "queue.order"),
+                            exchange = @Exchange(name = "exchange.order.deliveryman", type = ExchangeTypes.DIRECT),
+                            key = "key.order"
+                    ),
+                    @QueueBinding(
+                            value = @Queue(name = "queue.order"),
+                            exchange = @Exchange(name = "exchange.settlement.order", type = ExchangeTypes.FANOUT),
+                            key = "key.order"
+                    ),
+                    @QueueBinding(
+                            value = @Queue(name = "queue.order"),
+                            exchange = @Exchange(name = "exchange.order.reward", type = ExchangeTypes.TOPIC),
+                            key = "key.order"
+                    )
+            }
+    )
+    public void handleMessag(@Payload Message message) {
+        log.info("OrderMessageService.handleMessag.message:{}", new String(message.getBody()));
+
 
         ConnectionFactory connectionFactory = new ConnectionFactory();
         connectionFactory.setHost("129.28.198.9");
@@ -64,8 +110,8 @@ public class OrderMessageService {
         connectionFactory.setPassword("newpassword");
 
         try {
-//            //消息体反序列化为DTO
-//            OrderMessageDTO orderMessageDTO = objectMapper.readValue(messageBody, OrderMessageDTO.class);
+            //消息体反序列化为DTO
+            OrderMessageDTO orderMessageDTO = objectMapper.readValue(message.getBody(), OrderMessageDTO.class);
 
             //数据库中读取订PO
             OrderDetailPO orderDetailPO = orderDetailDao.selectOrder(orderMessageDTO.getOrderId());
