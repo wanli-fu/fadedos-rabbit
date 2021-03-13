@@ -1,6 +1,7 @@
 package com.fadedos.food.orderservicemanager.config;
 
 import com.fadedos.food.orderservicemanager.dto.OrderMessageDTO;
+import com.fadedos.food.orderservicemanager.fadedosmq.service.TransMessageService;
 import com.fadedos.food.orderservicemanager.service.OrderMessageService;
 import com.rabbitmq.client.Channel;
 import lombok.extern.slf4j.Slf4j;
@@ -42,82 +43,82 @@ public class RabbitConfig {
 //        orderMessageService.handleMessage();
 //    }
 
-//    /*---------restaurant---------*/
-//    @Bean
-//    public Exchange exchange1() {
-//        return new DirectExchange("exchange.order.restaurant");
-//    }
-//
-//    @Bean
-//    public Queue queue1() {
-//        return new Queue("queue.order");
-//    }
-//
-//    @Bean
-//    public Binding binding1() {
-//        return new Binding(
-//                "queue.order",
-//                Binding.DestinationType.QUEUE,
-//                "exchange.order.restaurant",
-//                "key.order",
-//                null);
-//    }
-//
-//    /*---------deliveryman---------*/
-//    @Bean
-//    public Exchange exchange2() {
-//        return new DirectExchange("exchange.order.deliveryman");
-//    }
-//
-//
-//    @Bean
-//    public Binding binding2() {
-//        return new Binding(
-//                "queue.order",
-//                Binding.DestinationType.QUEUE,
-//                "exchange.order.deliveryman",
-//                "key.order",
-//                null);
-//    }
-//
-//    /*---------settlement---------*/
-//    @Bean
-//    public Exchange exchange3() {
-//        return new FanoutExchange("exchange.order.settlement");
-//    }
-//
-//    @Bean
-//    public Exchange exchange4() {
-//        return new FanoutExchange("exchange.settlement.order");
-//    }
-//
-//    @Bean
-//    public Binding binding3() {
-//        return new Binding(
-//                "queue.order",
-//                Binding.DestinationType.QUEUE,
-//                //由于使用的fanout 群发 则须用两个虚拟机  订单模块 接收的到 结算模块的消息 是这个交换机
-//                "exchange.settlement.order",
-//                "key.order",
-//                null);
-//    }
-//
-//    /*---------reward---------*/
-//    @Bean
-//    public Exchange exchange5() {
-//        return new TopicExchange("exchange.order.reward");
-//    }
-//
-//
-//    @Bean
-//    public Binding binding4() {
-//        return new Binding(
-//                "queue.order",
-//                Binding.DestinationType.QUEUE,
-//                "exchange.order.reward",
-//                "key.order",
-//                null);
-//    }
+    /*---------restaurant---------*/
+    @Bean
+    public Exchange exchange1() {
+        return new DirectExchange("exchange.order.restaurant");
+    }
+
+    @Bean
+    public Queue queue1() {
+        return new Queue("queue.order");
+    }
+
+    @Bean
+    public Binding binding1() {
+        return new Binding(
+                "queue.order",
+                Binding.DestinationType.QUEUE,
+                "exchange.order.restaurant",
+                "key.order",
+                null);
+    }
+
+    /*---------deliveryman---------*/
+    @Bean
+    public Exchange exchange2() {
+        return new DirectExchange("exchange.order.deliveryman");
+    }
+
+
+    @Bean
+    public Binding binding2() {
+        return new Binding(
+                "queue.order",
+                Binding.DestinationType.QUEUE,
+                "exchange.order.deliveryman",
+                "key.order",
+                null);
+    }
+
+    /*---------settlement---------*/
+    @Bean
+    public Exchange exchange3() {
+        return new FanoutExchange("exchange.order.settlement");
+    }
+
+    @Bean
+    public Exchange exchange4() {
+        return new FanoutExchange("exchange.settlement.order");
+    }
+
+    @Bean
+    public Binding binding3() {
+        return new Binding(
+                "queue.order",
+                Binding.DestinationType.QUEUE,
+                //由于使用的fanout 群发 则须用两个虚拟机  订单模块 接收的到 结算模块的消息 是这个交换机
+                "exchange.settlement.order",
+                "key.order",
+                null);
+    }
+
+    /*---------reward---------*/
+    @Bean
+    public Exchange exchange5() {
+        return new TopicExchange("exchange.order.reward");
+    }
+
+
+    @Bean
+    public Binding binding4() {
+        return new Binding(
+                "queue.order",
+                Binding.DestinationType.QUEUE,
+                "exchange.order.reward",
+                "key.order",
+                null);
+    }
 
 //    @Bean
 //    public ConnectionFactory connectionFactory() {
@@ -231,4 +232,18 @@ public class RabbitConfig {
 //        simpleMessageListenerContainer.setMessageListener(messageListenerAdapter);
 //        return simpleMessageListenerContainer;
 //    }
+
+
+    @Bean
+    public SimpleMessageListenerContainer simpleMessageListenerContainer(ConnectionFactory connectionFactory) {
+        SimpleMessageListenerContainer simpleMessageListenerContainer =
+                new SimpleMessageListenerContainer(connectionFactory);
+
+        simpleMessageListenerContainer.setQueueNames("queue.order");
+
+        simpleMessageListenerContainer.setExposeListenerChannel(true);
+        simpleMessageListenerContainer.setAcknowledgeMode(AcknowledgeMode.MANUAL);
+        simpleMessageListenerContainer.setMessageListener(orderMessageService);
+        return simpleMessageListenerContainer;
+    }
 }

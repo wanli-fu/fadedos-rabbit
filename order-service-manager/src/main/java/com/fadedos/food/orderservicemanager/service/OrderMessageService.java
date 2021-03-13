@@ -4,6 +4,9 @@ package com.fadedos.food.orderservicemanager.service;
 import com.fadedos.food.orderservicemanager.dao.OrderDetailDao;
 import com.fadedos.food.orderservicemanager.dto.OrderMessageDTO;
 import com.fadedos.food.orderservicemanager.enummeration.OrderStatus;
+import com.fadedos.food.orderservicemanager.fadedosmq.listener.AbstractMessageListener;
+import com.fadedos.food.orderservicemanager.fadedosmq.sender.TransMessageSender;
+import com.fadedos.food.orderservicemanager.fadedosmq.service.TransMessageService;
 import com.fadedos.food.orderservicemanager.po.OrderDetailPO;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rabbitmq.client.*;
@@ -29,10 +32,15 @@ import java.util.concurrent.TimeoutException;
 @Slf4j
 @Service
 //@RabbitListener(containerFactory = "rabbitListenerContainerFactory", queues = "queue.order")  放在类上 和方法上注解配合使用 @RabbitHandler(isDefault = true)
-public class OrderMessageService {
+public class OrderMessageService extends AbstractMessageListener {
     @Autowired
     private OrderDetailDao orderDetailDao;
+
+    @Autowired
+    private TransMessageSender transMessageSender;
+
     ObjectMapper objectMapper = new ObjectMapper();
+
 
 //    /**
 //     * 声明消息队列,交换机,绑定,消息处理
@@ -60,56 +68,52 @@ public class OrderMessageService {
 //    }
 
     //    @RabbitHandler(isDefault = true) 和放在类上配合使用
-    @RabbitListener(
-//            containerFactory = "rabbitListenerContainerFactory",
-//            admin = "rabbitAdmin",
-            bindings = {
-                    @QueueBinding(
-                            value = @Queue(
-                                    name = "queue.order"
-//                                    arguments = {
-//                                            @Argument(
-//                                                    name = "x-message-ttl",
-//                                                    value = "1000",
-//                                                    type = "java.lang.Integer"
-//                                            ),
-//                                            @Argument(
-//                                                    name = "x-dead-letter-exchange",
-//                                                    value = "exchange.dlx"
-//                                            )
-//                                    }
-                            ),
-                            exchange = @Exchange(name = "exchange.order.restaurant"),
-                            key = "key.order"
-                    ),
-                    @QueueBinding(
-                            value = @Queue(name = "queue.order"),
-                            exchange = @Exchange(name = "exchange.order.deliveryman", type = ExchangeTypes.DIRECT),
-                            key = "key.order"
-                    ),
-                    @QueueBinding(
-                            value = @Queue(name = "queue.order"),
-                            exchange = @Exchange(name = "exchange.settlement.order", type = ExchangeTypes.FANOUT),
-                            key = "key.order"
-                    ),
-                    @QueueBinding(
-                            value = @Queue(name = "queue.order"),
-                            exchange = @Exchange(name = "exchange.order.reward", type = ExchangeTypes.TOPIC),
-                            key = "key.order"
-                    )
-            }
-    )
-    public void handleMessag(@Payload Message message) {
-        log.info("OrderMessageService.handleMessag.message:{}", new String(message.getBody()));
+//    @RabbitListener(
+////            containerFactory = "rabbitListenerContainerFactory",
+////            admin = "rabbitAdmin",
+//            bindings = {
+//                    @QueueBinding(
+//                            value = @Queue(
+//                                    name = "queue.order"
+////                                    arguments = {
+////                                            @Argument(
+////                                                    name = "x-message-ttl",
+////                                                    value = "1000",
+////                                                    type = "java.lang.Integer"
+////                                            ),
+////                                            @Argument(
+////                                                    name = "x-dead-letter-exchange",
+////                                                    value = "exchange.dlx"
+////                                            )
+////                                    }
+//                            ),
+//                            exchange = @Exchange(name = "exchange.order.restaurant"),
+//                            key = "key.order"
+//                    ),
+//                    @QueueBinding(
+//                            value = @Queue(name = "queue.order"),
+//                            exchange = @Exchange(name = "exchange.order.deliveryman", type = ExchangeTypes.DIRECT),
+//                            key = "key.order"
+//                    ),
+//                    @QueueBinding(
+//                            value = @Queue(name = "queue.order"),
+//                            exchange = @Exchange(name = "exchange.settlement.order", type = ExchangeTypes.FANOUT),
+//                            key = "key.order"
+//                    ),
+//                    @QueueBinding(
+//                            value = @Queue(name = "queue.order"),
+//                            exchange = @Exchange(name = "exchange.order.reward", type = ExchangeTypes.TOPIC),
+//                            key = "key.order"
+//                    )
+//            }
+//    )
+    @Override
+    public void receiveMessage(Message message) throws IOException {
+//        public void handleMessag (@Payload Message message){
+        log.info("OrderMessageService.handleMessage.message:{}", new String(message.getBody()));
 
 
-        ConnectionFactory connectionFactory = new ConnectionFactory();
-        connectionFactory.setHost("129.28.198.9");
-        connectionFactory.setPort(5672);
-        connectionFactory.setUsername("guest");
-        connectionFactory.setPassword("newpassword");
 
-        try {
             //消息体反序列化为DTO
             OrderMessageDTO orderMessageDTO = objectMapper.readValue(message.getBody(), OrderMessageDTO.class);
 
@@ -126,17 +130,22 @@ public class OrderMessageService {
                         orderDetailDao.update(orderDetailPO);
 
                         //给骑手微服务发送消息
-                        try (Connection connection = connectionFactory.newConnection();
-                             Channel channel = connection.createChannel()) {
-                            String messageToSend = objectMapper.writeValueAsString(orderMessageDTO);
-                            channel.basicPublish(
-                                    "exchange.order.deliveryman",
-                                    "key.deliveryman",//骑手微服务声明的routing key 谁接收消息谁申明routing key和队列
-                                    null,
-                                    messageToSend.getBytes()
-                            );
+//                            try (Connection connection = connectionFactory.newConnection();
+//                                 Channel channel = connection.createChannel()) {
+//                                String messageToSend = objectMapper.writeValueAsString(orderMessageDTO);
+//                                channel.basicPublish(
+//                                        "exchange.order.deliveryman",
+//                                        "key.deliveryman",//骑手微服务声明的routing key 谁接收消息谁申明routing key和队列
+//                                        null,
+//                                        messageToSend.getBytes()
+//                                );
+//
+//                            }
 
-                        }
+                        transMessageSender.send(
+                                "exchange.order.deliveryman",
+                                "key.deliveryman",
+                                orderDetailDao);
                     } else {
                         orderDetailPO.setStatus(OrderStatus.FAILED);
                         orderDetailDao.update(orderDetailPO);
@@ -149,16 +158,20 @@ public class OrderMessageService {
                         orderDetailPO.setDeliverymanId(orderMessageDTO.getDeliverymanId());
                         orderDetailDao.update(orderDetailPO);
 
-                        try (Connection connection = connectionFactory.newConnection();
-                             Channel channel = connection.createChannel()) {
-                            String messageToSend = objectMapper.writeValueAsString(orderMessageDTO);
-                            channel.basicPublish(
-                                    "exchange.order.settlement",
-                                    "key.order",
-                                    null,
-                                    messageToSend.getBytes()
-                            );
-                        }
+//                        try (Connection connection = connectionFactory.newConnection();
+//                             Channel channel = connection.createChannel()) {
+//                            String messageToSend = objectMapper.writeValueAsString(orderMessageDTO);
+//                            channel.basicPublish(
+//                                    "exchange.order.settlement",
+//                                    "key.order",
+//                                    null,
+//                                    messageToSend.getBytes()
+//                            );
+//                        }
+                        transMessageSender.send(
+                                "exchange.order.settlement",
+                                "key.settlement",
+                                orderDetailPO);
                     } else {
                         orderDetailPO.setStatus(OrderStatus.FAILED);
                         orderDetailDao.update(orderDetailPO);
@@ -172,17 +185,21 @@ public class OrderMessageService {
                         orderDetailDao.update(orderDetailPO);
 
                         //给积分微服务发送消息
-                        try (Connection connection = connectionFactory.newConnection();
-                             Channel channel = connection.createChannel()) {
-                            String messageToSend = objectMapper.writeValueAsString(orderMessageDTO);
-                            channel.basicPublish(
-                                    "exchange.order.reward",
-                                    "key.reward",
-                                    null,
-                                    messageToSend.getBytes()
-                            );
-
-                        }
+//                        try (Connection connection = connectionFactory.newConnection();
+//                             Channel channel = connection.createChannel()) {
+//                            String messageToSend = objectMapper.writeValueAsString(orderMessageDTO);
+//                            channel.basicPublish(
+//                                    "exchange.order.reward",
+//                                    "key.reward",
+//                                    null,
+//                                    messageToSend.getBytes()
+//                            );
+//
+//                        }
+                        transMessageSender.send(
+                                "exchange.order.reward",
+                                "key.reward",
+                                orderDetailPO);
                     } else {
                         orderDetailPO.setStatus(OrderStatus.FAILED);
                         orderDetailDao.update(orderDetailPO);
@@ -205,8 +222,7 @@ public class OrderMessageService {
                 default:
                     throw new IllegalStateException("Unexpected value: " + orderDetailPO.getStatus());
             }
-        } catch (Exception e) {
-            log.error(e.getMessage(), e);
-        }
+
+//        }
     }
 }

@@ -31,8 +31,8 @@ public class RabbitConfig {
         ConnectionFactory connectionFactory = new ConnectionFactory();
         connectionFactory.setHost("129.28.198.9");
         connectionFactory.setPort(5672);
-        connectionFactory.setUsername("guest");
-        connectionFactory.setPassword("newpassword");
+        connectionFactory.setUsername("wanli");
+        connectionFactory.setPassword("123456");
         Connection connection = connectionFactory.newConnection();
         Channel channel = connection.createChannel();
         return channel;

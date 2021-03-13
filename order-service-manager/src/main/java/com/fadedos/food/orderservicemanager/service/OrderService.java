@@ -4,6 +4,7 @@ package com.fadedos.food.orderservicemanager.service;
 import com.fadedos.food.orderservicemanager.dao.OrderDetailDao;
 import com.fadedos.food.orderservicemanager.dto.OrderMessageDTO;
 import com.fadedos.food.orderservicemanager.enummeration.OrderStatus;
+import com.fadedos.food.orderservicemanager.fadedosmq.sender.TransMessageSender;
 import com.fadedos.food.orderservicemanager.po.OrderDetailPO;
 import com.fadedos.food.orderservicemanager.vo.OrderCreateVO;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -36,6 +37,9 @@ public class OrderService {
     @Autowired
     private OrderDetailDao orderDetailDao;
 
+    @Autowired
+    private TransMessageSender transMessageSender;
+
     /**
      * 使用jackson
      */
@@ -64,24 +68,28 @@ public class OrderService {
         //DTO转换为json
         String messageToSend = objectMapper.writeValueAsString(orderMessageDTO);
 
-        MessageProperties messageProperties = new MessageProperties();
-        Message message = new Message(messageToSend.getBytes(), messageProperties);
+//        MessageProperties messageProperties = new MessageProperties();
+//        Message message = new Message(messageToSend.getBytes(), messageProperties);
+//
+//        //发送方消息确认回调 消息标识
+//        CorrelationData correlationData = new CorrelationData();
+//        correlationData.setId(orderDetailPO.getId().toString());
 
-        //发送方消息确认回调 消息标识
-        CorrelationData correlationData = new CorrelationData();
-        correlationData.setId(orderDetailPO.getId().toString());
-
-        rabbitTemplate.send(
-                "exchange.order.restaurant",
-                "key.restaurant",
-                message,
-                correlationData);
+//        rabbitTemplate.send(
+//                "exchange.order.restaurant",
+//                "key.restaurant",
+//                message,
+//                correlationData);
 
 //        rabbitTemplate.convertAndSend(
 //                "exchange.order.restaurant",
 //                "key.restaurant",
 //                messageToSend);
 
+        transMessageSender.send(
+                "exchange.order.restaurant",
+                "key.restaurant",
+                messageToSend);
 
         log.info("message send");
         Thread.sleep(100000);

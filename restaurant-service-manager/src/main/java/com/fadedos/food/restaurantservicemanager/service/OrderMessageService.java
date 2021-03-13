@@ -115,7 +115,8 @@ public class OrderMessageService {
 
     DeliverCallback deliverCallback = ((consumerTag, message) -> {
         //取出消息
-        String messageBody = new String(message.getBody());
+        String messageBody1 = new String(message.getBody()).replace("\\", "");
+        String messageBody = messageBody1.substring(1, messageBody1.length() - 1);
         log.info("deliverCallback:messageBody:{}", messageBody);
 
         try {
